@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template
+from flask import Flask, request, jsonify
 from openai import OpenAI
 import base64
 from PIL import Image
@@ -19,29 +19,35 @@ def encode_image(image):
     image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/ocr', methods=['POST'])
 def upload_file():
-    if request.method == 'POST':
-        file = request.files['file']
-        if file:
-            image = Image.open(file)
-            base64_image = encode_image(image)
-            response = client.chat.completions.create(
-                model='gpt-4o',
-                messages=[
-                    {"role": "system", "content": "Answer the question based on the image provided below:"},
-                    {"role": "user", "content": [
-                        {"type": "text", "text": "List out the details of the bill."},
-                        {"type": "image_url", "image_url": {
-                            "url": f"data:image/png;base64,{base64_image}"}
-                        }
-                    ]}
-                ],
-                temperature=0.0,
-            )
-            result = response.choices[0].message.content
-            return render_template('result.html', result=result)
-    return render_template('upload.html')
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+    
+    if file:
+        image = Image.open(file)
+        base64_image = encode_image(image)
+        response = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[
+                {"role": "system", "content": "Answer the question based on the image provided below:"},
+                {"role": "user", "content": [
+                    {"type": "text", "text": "List out the details of the bill."},
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:image/png;base64,{base64_image}"}
+                    }
+                ]}
+            ],
+            temperature=0.0,
+        )
+        result = response.choices[0].message.content
+        return jsonify({"result": result})
+    
+    return jsonify({"error": "Invalid file"}), 400
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')
