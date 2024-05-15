@@ -5,6 +5,7 @@ from PIL import Image
 import pytesseract
 import io
 import os
+from helpers.file_manipulation import extract_images_base64_from_file, del_file_from_disk, write_file_to_disk
 
 app = Flask(__name__)
 app.config['OPENAI_API_KEY'] = os.environ.get('OPENAI_API_KEY', 'sk-your-default-key')
@@ -29,21 +30,42 @@ def upload_file():
         return jsonify({"error": "No selected file"}), 400
     
     if file:
-        image = Image.open(file)
-        base64_image = encode_image(image)
+        messages = [{"role": "system", "content": "List out the details of a documents provided as images below:"}]
+
+        try:
+            image = Image.open(file)
+            base64_image = encode_image(image)
+            messages.append(
+                    {"role": "user", "content": [
+                        {"type": "text", "text": "Here is an image from the document:"},
+                        {"type": "image_url", "image_url": {
+                            "url": f"data:image/png;base64,{base64_image}"}
+                        }
+                    ]}
+                )
+        except IOError:
+            #file is not image, only process pdf files
+            if file.filename.endswith(".pdf"):
+                write_file_to_disk(file)
+                images = extract_images_base64_from_file(file.filename)
+                del_file_from_disk(file.filename)
+                for image_base64 in images:
+                    messages.append(
+                        {"role": "user", "content": [
+                            {"type": "text", "text": "Here is an image from the document:"},
+                            {"type": "image_url", "image_url": {
+                                "url": f"data:image/png;base64,{image_base64}"}
+                            }
+                        ]}
+                    )
+            else:
+                return jsonify({"error": "Invalid file, must be pdf or images"}), 400
+
         response = client.chat.completions.create(
-            model='gpt-4o',
-            messages=[
-                {"role": "system", "content": "Answer the question based on the image provided below:"},
-                {"role": "user", "content": [
-                    {"type": "text", "text": "List out the details of the bill."},
-                    {"type": "image_url", "image_url": {
-                        "url": f"data:image/png;base64,{base64_image}"}
-                    }
-                ]}
-            ],
-            temperature=0.0,
-        )
+                model='gpt-4o',
+                messages=messages,
+                temperature=0.0,
+            )
         result = response.choices[0].message.content
         return jsonify({"result": result})
     
@@ -51,4 +73,3 @@ def upload_file():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')
-
