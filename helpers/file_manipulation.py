@@ -1,14 +1,15 @@
-file_manipulimport io
-import os
 import base64
 import fitz
+import os
+import io
 from PIL import Image
+
 BASE_DIR = os.getcwd()
 
 def extract_images_base64_from_file(file_name):
-    document = fitz.open(os.path.join(BASE_DIR,"tmp"+f"/{file_name}"))
+    document = fitz.open(os.path.join(BASE_DIR, "tmp", file_name))
     images = []
-    for page_num in range(document.page_count):
+    for page_num in range(len(document)):
         page = document.load_page(page_num)
         image_list = page.get_images(full=True)
         for img_index, img in enumerate(image_list):
@@ -23,7 +24,7 @@ def extract_images_base64_from_file(file_name):
 
 def del_file_from_disk(file_name: str):
     try:
-        os.remove(os.path.join(BASE_DIR,"tmp"+f"/{file_name}"))
+        os.remove(os.path.join(BASE_DIR, "tmp", file_name))
         return True
     except Exception as e:
         print(f"error: {e}")
@@ -31,8 +32,9 @@ def del_file_from_disk(file_name: str):
 
 def write_file_to_disk(file):
     try:
-        file.save(os.path.join(BASE_DIR,"tmp"+f"/{file.filename}"))
+        file.save(os.path.join(BASE_DIR, "tmp", file.filename))
         return True
     except Exception as e:
         print(f"error: {e}")
         return False
+
