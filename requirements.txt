@@ -2,4 +2,6 @@ Flask
 openai
 pillow
 pytesseract
-
+fitz
+frontend
+tools 

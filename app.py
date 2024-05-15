@@ -1,15 +1,20 @@
+import os
 from flask import Flask, request, jsonify
 from openai import OpenAI
 import base64
 from PIL import Image
 import pytesseract
 import io
-import os
 from helpers.file_manipulation import extract_images_base64_from_file, del_file_from_disk, write_file_to_disk
 
 app = Flask(__name__)
 app.config['OPENAI_API_KEY'] = os.environ.get('OPENAI_API_KEY', 'sk-your-default-key')
 client = OpenAI(api_key=app.config['OPENAI_API_KEY'])
+
+# Ensure the static directory exists
+STATIC_DIRECTORY = os.path.join(os.path.dirname(__file__), 'static')
+if not os.path.exists(STATIC_DIRECTORY):
+    os.makedirs(STATIC_DIRECTORY)
 
 def extract_text_from_image(image):
     text = pytesseract.image_to_string(image)
@@ -24,11 +29,11 @@ def encode_image(image):
 def upload_file():
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
-    
+
     file = request.files['file']
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
-    
+
     if file:
         messages = [{"role": "system", "content": "List out the details of a documents provided as images below:"}]
 
@@ -44,7 +49,7 @@ def upload_file():
                     ]}
                 )
         except IOError:
-            #file is not image, only process pdf files
+            # file is not image, only process pdf files
             if file.filename.endswith(".pdf"):
                 write_file_to_disk(file)
                 images = extract_images_base64_from_file(file.filename)
@@ -68,8 +73,9 @@ def upload_file():
             )
         result = response.choices[0].message.content
         return jsonify({"result": result})
-    
+
     return jsonify({"error": "Invalid file"}), 400
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')
+
