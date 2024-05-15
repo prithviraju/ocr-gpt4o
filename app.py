@@ -1,15 +1,17 @@
 import os
-from flask import Flask, request, jsonify
-from openai import OpenAI
+from flask import Flask, request, jsonify, render_template
+from openai import OpenAI, APIConnectionError
 import base64
 from PIL import Image
 import pytesseract
 import io
 from helpers.file_manipulation import extract_images_base64_from_file, del_file_from_disk, write_file_to_disk
+import time
 
 app = Flask(__name__)
-app.config['OPENAI_API_KEY'] = os.environ.get('OPENAI_API_KEY', 'sk-your-default-key')
-client = OpenAI(api_key=app.config['OPENAI_API_KEY'])
+api_key = os.environ.get('OPENAI_API_KEY', 'sk-your-default-key')
+print(f"OpenAI API Key: {api_key}")  # Debug print
+client = OpenAI(api_key=api_key)
 
 # Ensure the static directory exists
 STATIC_DIRECTORY = os.path.join(os.path.dirname(__file__), 'static')
@@ -25,8 +27,71 @@ def encode_image(image):
     image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-@app.route('/ocr', methods=['POST'])
+@app.route('/')
+def index():
+    return render_template('upload.html')
+
+@app.route('/upload', methods=['POST'])
 def upload_file():
+    if 'file' not in request.files:
+        return render_template('upload.html', error="No file part")
+
+    file = request.files['file']
+    if file.filename == '':
+        return render_template('upload.html', error="No selected file")
+
+    if file:
+        messages = [{"role": "system", "content": "List out the details of a document provided as images below:"}]
+
+        try:
+            image = Image.open(file)
+            base64_image = encode_image(image)
+            messages.append(
+                {"role": "user", "content": [
+                    {"type": "text", "text": "Here is an image from the document:"},
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:image/png;base64,{base64_image}"}
+                    }
+                ]}
+            )
+        except IOError:
+            if file.filename.endswith(".pdf"):
+                write_file_to_disk(file)
+                images = extract_images_base64_from_file(file.filename)
+                del_file_from_disk(file.filename)
+                for image_base64 in images:
+                    messages.append(
+                        {"role": "user", "content": [
+                            {"type": "text", "text": "Here is an image from the document:"},
+                            {"type": "image_url", "image_url": {
+                                "url": f"data:image/png;base64,{image_base64}"}
+                            }
+                        ]}
+                    )
+            else:
+                return render_template('upload.html', error="Invalid file, must be pdf or images")
+
+        # Implementing a retry mechanism
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=messages,
+                    temperature=0.0,
+                )
+                result = response.choices[0].message.content
+                return render_template('result.html', result=result)
+            except APIConnectionError as e:
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    return render_template('upload.html', error="Connection error. Please try again later.")
+
+    return render_template('upload.html', error="Invalid file")
+
+@app.route('/ocr', methods=['POST'])
+def ocr_api():
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
 
@@ -35,21 +100,20 @@ def upload_file():
         return jsonify({"error": "No selected file"}), 400
 
     if file:
-        messages = [{"role": "system", "content": "List out the details of a documents provided as images below:"}]
+        messages = [{"role": "system", "content": "List out the details of a document provided as images below:"}]
 
         try:
             image = Image.open(file)
             base64_image = encode_image(image)
             messages.append(
-                    {"role": "user", "content": [
-                        {"type": "text", "text": "Here is an image from the document:"},
-                        {"type": "image_url", "image_url": {
-                            "url": f"data:image/png;base64,{base64_image}"}
-                        }
-                    ]}
-                )
+                {"role": "user", "content": [
+                    {"type": "text", "text": "Here is an image from the document:"},
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:image/png;base64,{base64_image}"}
+                    }
+                ]}
+            )
         except IOError:
-            # file is not image, only process pdf files
             if file.filename.endswith(".pdf"):
                 write_file_to_disk(file)
                 images = extract_images_base64_from_file(file.filename)
@@ -66,13 +130,22 @@ def upload_file():
             else:
                 return jsonify({"error": "Invalid file, must be pdf or images"}), 400
 
-        response = client.chat.completions.create(
-                model='gpt-4o',
-                messages=messages,
-                temperature=0.0,
-            )
-        result = response.choices[0].message.content
-        return jsonify({"result": result})
+        # Implementing a retry mechanism
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = client.chat.completions.create(
+                    model='gpt-4o',
+                    messages=messages,
+                    temperature=0.0,
+                )
+                result = response.choices[0].message.content
+                return jsonify({"result": result})
+            except APIConnectionError as e:
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    return jsonify({"error": "Connection error. Please try again later."}), 500
 
     return jsonify({"error": "Invalid file"}), 400
 
