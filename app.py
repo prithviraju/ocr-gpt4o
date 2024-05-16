@@ -36,7 +36,7 @@ def upload_file():
         return render_template('upload.html', error="No selected file")
 
     if file:
-        messages = [{"role": "system", "content": "List out the details of a document provided as images below:"}]
+        messages = [{"role": "system", "content": "List out the details of a document provided as images below. Do no miss out on Receipt ID or Number, Merchant Name, Date/Time in ISO format, Total Amount, and Currency. If the currency is not explicitly mentioned, infer it based on the merchant's location or other contextual clues. Additionally, indicate whether the receipt includes any alcohol items:"}]
 
         try:
             if file.filename.endswith(".pdf"):
@@ -96,7 +96,7 @@ def ocr_api():
         return jsonify({"error": "No selected file"}), 400
 
     if file:
-        messages = [{"role": "system", "content": "List out the details of a document provided as images below:"}]
+        messages = [{"role": "system", "content": "List out the details of a document provided as images below. Do no miss out on Receipt ID or Number, Merchant Name, Date/Time in ISO format, Total Amount, and Currency. If the currency is not explicitly mentioned, infer it based on the merchant's location or other contextual clues. Additionally, indicate whether the receipt includes any alcohol items:"}]
 
         try:
             if file.filename.endswith(".pdf"):
