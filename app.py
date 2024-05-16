@@ -4,6 +4,7 @@ from openai import OpenAI, APIConnectionError
 import base64
 from PIL import Image
 import io
+from helpers.data_transformation import process_gpt_result_for_bills
 from helpers.file_manipulation import clear_tmp_directory, extract_images_base64_from_file, write_file_to_disk
 import time
 
@@ -36,7 +37,7 @@ def upload_file():
         return render_template('upload.html', error="No selected file")
 
     if file:
-        messages = [{"role": "system", "content": "List out the details of a document provided as images below. Do no miss out on Receipt ID or Number, Merchant Name, Date/Time in ISO format, Total Amount, and Currency. If the currency is not explicitly mentioned, infer it based on the merchant's location or other contextual clues. Additionally, indicate whether the receipt includes any alcohol items. Compile and show the final result deterministically as the following keys `reciept_id, merchant_name, date, total_amount, currency, alcohol`"}]
+        messages = [{"role": "system", "content": "List out the details inferred of a document provided as images below. Do no miss out on Receipt ID or Number, Merchant Name, Date/Time in ISO format, Total Amount, and Currency. If the currency is not explicitly mentioned, infer it based on the merchant's location or other contextual clues. Additionally, indicate whether the receipt includes any alcohol items as boolean. Compile and show the final result deterministically as the following keys exactly `receipt_id, merchant_name, date, total_amount, currency, alcohol`. Do not modify the mentioned key names. Include another key `document_type` denoting whether the document either a bill, a resume or other type of document."}]
 
         try:
             if file.filename.endswith(".pdf"):
@@ -77,7 +78,7 @@ def upload_file():
                     temperature=0.0,
                 )
                 result = response.choices[0].message.content
-                return render_template('result.html', result=result)
+                return render_template('result.html', result=process_gpt_result_for_bills(result))
             except APIConnectionError as e:
                 if attempt < max_retries - 1:
                     time.sleep(2 ** attempt)  # Exponential backoff
@@ -96,7 +97,7 @@ def ocr_api():
         return jsonify({"error": "No selected file"}), 400
 
     if file:
-        messages = [{"role": "system", "content": "List out the details of a document provided as images below. Do no miss out on Receipt ID or Number, Merchant Name, Date/Time in ISO format, Total Amount, and Currency. If the currency is not explicitly mentioned, infer it based on the merchant's location or other contextual clues. Additionally, indicate whether the receipt includes any alcohol items. Compile and show the final result deterministically as the following keys `reciept_id, merchant_name, date, total_amount, currency, alcohol`"}]
+        messages = [{"role": "system", "content": "List out the details inferred of a document provided as images below. Do no miss out on Receipt ID or Number, Merchant Name, Date/Time in ISO format, Total Amount, and Currency. If the currency is not explicitly mentioned, infer it based on the merchant's location or other contextual clues. Additionally, indicate whether the receipt includes any alcohol items as boolean. Compile and show the final result deterministically as the following keys exactly `receipt_id, merchant_name, date, total_amount, currency, alcohol`. Do not modify the mentioned key names. Include another key `document_type` denoting whether the document either a bill, a resume or other type of document."}]
 
         try:
             if file.filename.endswith(".pdf"):
@@ -137,7 +138,7 @@ def ocr_api():
                     temperature=0.0,
                 )
                 result = response.choices[0].message.content
-                return jsonify({"result": result})
+                return jsonify({"result": process_gpt_result_for_bills(result)})
             except APIConnectionError as e:
                 if attempt < max_retries - 1:
                     time.sleep(2 ** attempt)  # Exponential backoff
