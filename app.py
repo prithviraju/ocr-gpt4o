@@ -3,9 +3,8 @@ from flask import Flask, request, jsonify, render_template
 from openai import OpenAI, APIConnectionError
 import base64
 from PIL import Image
-import pytesseract
 import io
-from helpers.file_manipulation import extract_images_base64_from_file, del_file_from_disk, write_file_to_disk
+from helpers.file_manipulation import clear_tmp_directory, extract_images_base64_from_file, write_file_to_disk
 import time
 
 app = Flask(__name__)
@@ -17,10 +16,6 @@ client = OpenAI(api_key=api_key)
 STATIC_DIRECTORY = os.path.join(os.path.dirname(__file__), 'static')
 if not os.path.exists(STATIC_DIRECTORY):
     os.makedirs(STATIC_DIRECTORY)
-
-def extract_text_from_image(image):
-    text = pytesseract.image_to_string(image)
-    return text
 
 def encode_image(image):
     buffered = io.BytesIO()
@@ -41,24 +36,13 @@ def upload_file():
         return render_template('upload.html', error="No selected file")
 
     if file:
-        messages = [{"role": "system", "content": "List out the details of a document provided as images below:"}]
+        messages = [{"role": "system", "content": "List out the details of a document provided as images below. Do no miss out on Receipt ID or Number, Merchant Name, Date/Time in ISO format, Total Amount, and Currency. If the currency is not explicitly mentioned, infer it based on the merchant's location or other contextual clues. Additionally, indicate whether the receipt includes any alcohol items:"}]
 
         try:
-            image = Image.open(file)
-            base64_image = encode_image(image)
-            messages.append(
-                {"role": "user", "content": [
-                    {"type": "text", "text": "Here is an image from the document:"},
-                    {"type": "image_url", "image_url": {
-                        "url": f"data:image/png;base64,{base64_image}"}
-                    }
-                ]}
-            )
-        except IOError:
             if file.filename.endswith(".pdf"):
                 write_file_to_disk(file)
                 images = extract_images_base64_from_file(file.filename)
-                del_file_from_disk(file.filename)
+                clear_tmp_directory()
                 for image_base64 in images:
                     messages.append(
                         {"role": "user", "content": [
@@ -69,7 +53,19 @@ def upload_file():
                         ]}
                     )
             else:
-                return render_template('upload.html', error="Invalid file, must be pdf or images")
+                image = Image.open(file)
+                base64_image = encode_image(image)
+                messages.append(
+                        {"role": "user", "content": [
+                            {"type": "text", "text": "Here is an image from the document:"},
+                            {"type": "image_url", "image_url": {
+                                "url": f"data:image/png;base64,{base64_image}"}
+                            }
+                        ]}
+                    )
+        except IOError as e:
+            print(f"error: {e}")
+            return render_template('upload.html', error="Invalid file, must be pdf or images")
 
         # Implementing a retry mechanism
         max_retries = 3
@@ -100,24 +96,13 @@ def ocr_api():
         return jsonify({"error": "No selected file"}), 400
 
     if file:
-        messages = [{"role": "system", "content": "List out the details of a document provided as images below:"}]
+        messages = [{"role": "system", "content": "List out the details of a document provided as images below. Do no miss out on Receipt ID or Number, Merchant Name, Date/Time in ISO format, Total Amount, and Currency. If the currency is not explicitly mentioned, infer it based on the merchant's location or other contextual clues. Additionally, indicate whether the receipt includes any alcohol items:"}]
 
         try:
-            image = Image.open(file)
-            base64_image = encode_image(image)
-            messages.append(
-                {"role": "user", "content": [
-                    {"type": "text", "text": "Here is an image from the document:"},
-                    {"type": "image_url", "image_url": {
-                        "url": f"data:image/png;base64,{base64_image}"}
-                    }
-                ]}
-            )
-        except IOError:
             if file.filename.endswith(".pdf"):
                 write_file_to_disk(file)
                 images = extract_images_base64_from_file(file.filename)
-                del_file_from_disk(file.filename)
+                clear_tmp_directory()
                 for image_base64 in images:
                     messages.append(
                         {"role": "user", "content": [
@@ -128,7 +113,19 @@ def ocr_api():
                         ]}
                     )
             else:
-                return jsonify({"error": "Invalid file, must be pdf or images"}), 400
+                image = Image.open(file)
+                base64_image = encode_image(image)
+                messages.append(
+                        {"role": "user", "content": [
+                            {"type": "text", "text": "Here is an image from the document:"},
+                            {"type": "image_url", "image_url": {
+                                "url": f"data:image/png;base64,{base64_image}"}
+                            }
+                        ]}
+                    )
+        except IOError as e:
+            print(f"error: {e}")
+            return jsonify({"error": "Invalid file, must be pdf or images"}), 400
 
         # Implementing a retry mechanism
         max_retries = 3
@@ -150,5 +147,6 @@ def ocr_api():
     return jsonify({"error": "Invalid file"}), 400
 
 if __name__ == '__main__':
+    clear_tmp_directory()
     app.run(debug=True, host='0.0.0.0')
 
