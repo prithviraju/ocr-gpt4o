@@ -10,7 +10,9 @@ COPY . /app
 RUN mkdir -p /app/static
 
 # Install any needed packages specified in requirements.txt
+RUN apt-get update && apt-get install poppler-utils -y
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && pip install -U PyMuPDF
 
 # Make port 5000 available to the world outside this container
 EXPOSE 5000
@@ -20,5 +22,3 @@ ENV FLASK_APP=app.py
 
 # Run flask when the container launches
 CMD ["flask", "run", "--host=0.0.0.0"]
-
-
