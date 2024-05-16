@@ -7,6 +7,8 @@ import io
 from helpers.file_manipulation import clear_tmp_directory, extract_images_base64_from_file, write_file_to_disk
 import time
 
+from aws_helper import analyze_image
+
 app = Flask(__name__)
 api_key = os.environ.get('OPENAI_API_KEY', 'sk-your-default-key')
 print(f"OpenAI API Key: {api_key}")  # Debug print
@@ -145,6 +147,27 @@ def ocr_api():
                     return jsonify({"error": "Connection error. Please try again later."}), 500
 
     return jsonify({"error": "Invalid file"}), 400
+
+@app.route('/aws-textract', methods=['POST'])
+def textract_api():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    try:
+        if file.filename.endswith(".png") or file.filename.endswith(".jpeg") or file.filename.endswith(".jpg"):
+            image = Image.open(file)
+            base64_image = encode_image(image)
+            result = analyze_image(base64_image)
+            return jsonify({"result": result})
+        else:
+            return jsonify({"error": "Invalid file, must be an image"}), 400
+    except Exception as e:
+        print(f"error: {e}")
+        return jsonify({"error": "Something went wrong. Please try again later."}), 500
 
 if __name__ == '__main__':
     clear_tmp_directory()
