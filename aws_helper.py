@@ -78,11 +78,13 @@ def process_expense_analysis(s3_connection, client, image_base64, bucket = '', d
                     for key, val in expense_fields["ValueDetection"].items():
                         if "Geometry" in key:
                             # draw_bounding_box(key, val, width, height, draw)
+                            print()
 
         for label in expense_doc["SummaryFields"]:
             if "LabelDetection" in label:
                 for key, val in label["LabelDetection"].items():
                     # draw_bounding_box(key, val, width, height, draw)
+                    print()
 
     return result
 
