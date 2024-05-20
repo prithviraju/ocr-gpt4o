@@ -27,6 +27,10 @@ def encode_image(image):
 def index():
     return render_template('upload.html')
 
+@app.route('/health')
+def health():
+    return "OK"
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
