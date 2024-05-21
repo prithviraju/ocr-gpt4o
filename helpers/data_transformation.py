@@ -1,5 +1,5 @@
 def process_gpt_result_for_bills(result: str):
-    valid_keys = ['receipt_id', 'merchant_name', 'date', 'total_amount', 'currency', 'alcohol', 'document_type']
+    valid_keys = ['receipt_id', 'merchant_name', 'expense_date', 'total_amount', 'currency', 'alcohol', 'document_type']
 
     details = {"is_valid_document": False}
     output = []
@@ -13,9 +13,8 @@ def process_gpt_result_for_bills(result: str):
         for line in lines:
             # Split each line by ':' to separate key and value
             parts = line.split(':')
-
             # Ensure there are two parts (key and value)
-            if len(parts) == 2:
+            if len(parts) >= 2:
                 # Strip any leading or trailing whitespace
                 key = parts[0].strip()
                 value = parts[1].strip()
@@ -25,6 +24,9 @@ def process_gpt_result_for_bills(result: str):
                         # Add key-value pair to the dictionary
                         if valid_key == 'document_type' and any(ele in value.lower() for ele in ['other', 'resume']):
                             details['is_valid_document'] = False
+
+                        if valid_key == 'expense_date':
+                            value = value[:10]
 
                         details[valid_key] = value
 
